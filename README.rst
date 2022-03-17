@@ -5,6 +5,8 @@ python-can
 
 |docs| |github-actions| |build_travis| |coverage| |mergify|
 
+* modifications to the original repo hardbyte/python-can 
+
 .. |release| image:: https://img.shields.io/pypi/v/python-can.svg
    :target: https://pypi.python.org/pypi/python-can/
    :alt: Latest Version on PyPi
