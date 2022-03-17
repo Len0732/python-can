@@ -296,3 +296,98 @@ class ThreadBasedCyclicSendTask(
                 # Compensate for the time it takes to send the message
                 delay = self.period - (time.perf_counter() - started)
                 time.sleep(max(0.0, delay))
+
+
+class ThreadBasedCyclicSendTask_EventTrigger(
+    ModifiableCyclicTaskABC, LimitedDurationCyclicSendTaskABC, RestartableCyclicTaskABC
+):
+    """Fallback cyclic send task using daemon thread."""
+
+    def __init__(
+        self,
+        bus: "BusABC",
+        lock: threading.Lock,
+        messages: Union[Sequence[Message], Message],
+        period: float,
+        duration: Optional[float] = None,
+        on_error: Optional[Callable[[Exception], bool]] = None,
+    ) -> None:
+        """Transmits `messages` with a `period` seconds for `duration` seconds on a `bus`.
+
+        The `on_error` is called if any error happens on `bus` while sending `messages`.
+        If `on_error` present, and returns ``False`` when invoked, thread is
+        stopped immediately, otherwise, thread continuously tries to send `messages`
+        ignoring errors on a `bus`. Absence of `on_error` means that thread exits immediately
+        on error.
+
+        :param on_error: The callable that accepts an exception if any
+                         error happened on a `bus` while sending `messages`,
+                         it shall return either ``True`` or ``False`` depending
+                         on desired behaviour of `ThreadBasedCyclicSendTask`.
+
+        :raises ValueError: If the given messages are invalid
+        """
+        super().__init__(messages, period, duration)
+        self.bus = bus
+        self.send_lock = lock
+        self.stopped = True
+        self.thread: Optional[threading.Thread] = None
+        self.end_time: Optional[float] = (
+            time.perf_counter() + duration if duration else None
+        )
+        self.on_error = on_error
+
+        if HAS_EVENTS:
+            self.period_ms = int(round(period * 1000, 0))
+            self.event = win32event.CreateWaitableTimer(None, False, None)
+
+        self.start()
+
+    def stop(self) -> None:
+        if HAS_EVENTS:
+            win32event.CancelWaitableTimer(self.event.handle)
+        self.stopped = True
+
+    def start(self) -> None:
+        self.stopped = False
+        if self.thread is None or not self.thread.is_alive():
+            name = f"Cyclic send task for 0x{self.messages[0].arbitration_id:X}"
+            self.thread = threading.Thread(target=self._run, name=name)
+            self.thread.daemon = True
+
+            if HAS_EVENTS:
+                win32event.SetWaitableTimer(
+                    self.event.handle, 0, self.period_ms, None, None, False
+                )
+
+            self.thread.start()
+
+    def _run(self) -> None:
+        msg_index = 0
+        while not self.stopped:
+            # Prevent calling bus.send from multiple threads
+            with self.send_lock:
+                started = time.perf_counter()
+                try:
+                    self.bus.send(self.messages[msg_index])
+                    #! custom code
+                    # set the send event
+                    self.bus.sendEvent.set()
+                    #! end of custom code
+                except Exception as exc:  # pylint: disable=broad-except
+                    log.exception(exc)
+                    if self.on_error:
+                        if not self.on_error(exc):
+                            break
+                    else:
+                        break
+            if self.end_time is not None and time.perf_counter() >= self.end_time:
+                break
+            msg_index = (msg_index + 1) % len(self.messages)
+
+            if HAS_EVENTS:
+                win32event.WaitForSingleObject(self.event.handle, self.period_ms)
+            else:
+                # Compensate for the time it takes to send the message
+                delay = self.period - (time.perf_counter() - started)
+                time.sleep(max(0.0, delay))
