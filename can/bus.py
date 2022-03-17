@@ -71,6 +71,10 @@ class BusABC(metaclass=ABCMeta):
         """
         self._periodic_tasks: List[_SelfRemovingCyclicTask] = []
         self.set_filters(can_filters)
+        #! custom code
+        self.sendEvent = threading.Event()
+        self.sendEvent.clear()
+        #! end of custom code
 
     def __str__(self) -> str:
         return self.channel_info
