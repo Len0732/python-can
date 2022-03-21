@@ -1,3 +1,7 @@
+*Note
+==========
+This is a modified version of the original repository, and will not be updated. 
+
 python-can
 ==========
 
@@ -5,7 +9,6 @@ python-can
 
 |docs| |github-actions| |build_travis| |coverage| |mergify|
 
-* modifications to the original repo hardbyte/python-can 
 
 .. |release| image:: https://img.shields.io/pypi/v/python-can.svg
    :target: https://pypi.python.org/pypi/python-can/
