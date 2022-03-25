@@ -1,6 +1,6 @@
 *Note
 ==========
-This is a modified version of the original repository, and will not be updated. 
+This is a modified version of the original repository to make some functions call an internal event. Changes are minimal, so use the original repository for updated versions. 
 
 python-can
 ==========
